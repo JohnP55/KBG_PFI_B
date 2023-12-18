@@ -44,7 +44,8 @@ export default class collectionFilter {
         let descending = false;
 
         if (parts.length > 0)
-            sortField = utilities.capitalizeFirstLetter(parts[0].toLowerCase().trim());
+            // sortField = utilities.capitalizeFirstLetter(parts[0].toLowerCase().trim());
+            sortField = parts[0];
         else
             return null;
 
