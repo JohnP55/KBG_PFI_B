@@ -45,6 +45,12 @@ export default class CachedRequestsManager {
         }
         CachedRequests = CachedRequests.filter(endpoint => endpoint.Expire_Time > now);
     }
+    static flushInvalid(HttpContext) {
+        for (let endpoint of cachedRequests) {
+            if (endpoint.ETag != repositoryEtags[utilities.capitalizeFirstLetter(HttpContext.path.model)])
+                CachedRequestsManager.clear(endpoint.url);
+        }
+    }
     static readAuthorization(HttpContext, authorizations) {
         if (authorizations)
             return Authorizations.readGranted(HttpContext, authorizations);
@@ -54,6 +60,10 @@ export default class CachedRequestsManager {
         if (HttpContext.cacheable) {
             let cacheFound = CachedRequestsManager.find(HttpContext.req.url);
             if (cacheFound) {
+                if (cacheFound.ETag != repositoryEtags[utilities.capitalizeFirstLetter(HttpContext.path.model)]) {
+                    CachedRequestsManager.clear(cacheFound.url);
+                    return false;
+                }
                 if (CachedRequestsManager.readAuthorization(HttpContext, cacheFound.authorizations)) {
                     HttpContext.response.JSON(cacheFound.content, cacheFound.ETag, true);
                     return true;

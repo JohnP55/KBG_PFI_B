@@ -18,6 +18,9 @@ let HorizontalPhotosCount;
 let VerticalPhotosCount;
 let offset = 0;
 
+const LIKE_NOTLIKED_ICON_FAMILY = "fa-regular";
+const LIKE_LIKED_ICON_FAMILY = "fa";
+
 Init_UI();
 function Init_UI() {
     getViewPortPhotosRanges();
@@ -71,6 +74,45 @@ function attachCmd() {
     $('#renderManageUsersMenuCmd').on('click', renderManageUsers);
     $('#editProfilCmd').on('click', renderEditProfilForm);
     $('#aboutCmd').on("click", renderAbout);
+    $('#newPhotoCmd').on("click", () => {
+        saveContentScrollPosition();
+        renderPhotoForm();
+    });
+    $('.editPhotoCmd').on("click", function() {
+        saveContentScrollPosition();
+        renderEditPhotoForm($(this).attr('editPhotoId'));
+    });
+    $('.deletePhotoCmd').on("click", function() {
+
+    });
+    $('.likeCmd').on("click", async function () {
+        let result = await API.LikePhoto($(this).attr("likePhotoId"));
+        if (result) {
+            let likeCountElem = $(this).prev();
+            let usersName = API.retrieveLoggedUser().Name;
+            let userArray = tooltipToUserArray($(this).parent().attr("title"));
+
+            if ($(this).hasClass(LIKE_NOTLIKED_ICON_FAMILY)) {
+                $(this).removeClass(LIKE_NOTLIKED_ICON_FAMILY);
+                $(this).addClass(LIKE_LIKED_ICON_FAMILY);
+
+                likeCountElem.html(parseInt(likeCountElem.html()) + 1);
+
+                userArray.push(usersName);
+
+            } else if ($(this).hasClass(LIKE_LIKED_ICON_FAMILY)) { // accounting for the rare occurence that a like button does somehow load without either class
+                $(this).removeClass(LIKE_LIKED_ICON_FAMILY);
+                $(this).addClass(LIKE_NOTLIKED_ICON_FAMILY);
+                likeCountElem.html(parseInt(likeCountElem.html()) - 1);
+
+                let index = userArray.indexOf(usersName);
+                if (index > -1) {
+                    userArray.splice(index, 1);
+                }
+            }
+            $(this).parent().attr("title", userArrayToTooltip(userArray));
+        }
+    });
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Header management
@@ -106,7 +148,27 @@ function loggedUserMenu() {
 function viewMenu(viewName) {
     if (viewName == "photosList") {
         // todo
-        return "";
+        return `<div class="dropdown-divider"></div>
+        <span class="dropdown-item" id="sortByDateCmd">
+        <i class="menuIcon fa fa-check mx-2"></i>
+        <i class="menuIcon fa fa-calendar mx-2"></i>
+        Photos par date de création
+        </span>
+        <span class="dropdown-item" id="sortByOwnersCmd">
+        <i class="menuIcon fa fa-fw mx-2"></i>
+        <i class="menuIcon fa fa-users mx-2"></i>
+        Photos par créateur
+        </span>
+        <span class="dropdown-item" id="sortByLikesCmd">
+        <i class="menuIcon fa fa-fw mx-2"></i>
+        <i class="menuIcon fa fa-user mx-2"></i>
+        Photos les plus aiméés
+        </span>
+        <span class="dropdown-item" id="ownerOnlyCmd">
+        <i class="menuIcon fa fa-fw mx-2"></i>
+        <i class="menuIcon fa fa-user mx-2"></i>
+        Mes photos
+        </span>`;
     }
     else
         return "";
@@ -251,6 +313,7 @@ async function deleteProfil() {
             renderError("Un problème est survenu.");
     }
 }
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Views rendering
 function showWaitingGif() {
@@ -352,9 +415,145 @@ async function renderPhotos() {
         renderLoginForm();
     }
 }
-async function renderPhotosList() {
+function newPhoto() {
+    photo = {};
+    photo.Id = 0;
+    photo.Title = "";
+    photo.Description = "";
+    photo.Shared = false;
+    return photo;
+}
+async function renderEditPhotoForm(id) {
+    let photo = await API.GetPhotosById(id);
+    if (photo !== null)
+        renderPhotoForm(photo);
+    else
+        renderError("Photo introuvable!");
+}
+function renderPhotoForm(photo = null) {
+    $("#newPhotoCmd").hide();
+    $("#abort").show();
     eraseContent();
-    $("#content").append("<h2> En contruction </h2>");
+    let create = photo == null;
+    if (create) {
+        photo = newPhoto();
+        photo.Image = "images/PhotoCloudLogo.png";
+    }
+    $("#actionTitle").text(create ? "Création" : "Modification");
+    $("#content").append(`
+        <form class="form" id="photoForm">
+            <input type="hidden" name="Id" value="${photo.Id}"/>
+            <fieldset>
+            <legend>Informations</legend>
+            <input 
+                class="form-control AlphaNum"
+                name="Title" 
+                id="Title"
+                placeholder="Titre"
+                required
+                RequireMessage="Veuillez entrer un titre"
+                InvalidMessage="Le titre comporte un caractère illégal" 
+                value="${photo.Title}"
+            />
+            <textarea 
+                class="form-control AlphaNum"
+                name="Description" 
+                id="Description"
+                placeholder="Description"
+                required
+                RequireMessage="Veuillez entrer une description"
+                InvalidMessage="La description comporte un caractère illégal" 
+            >${photo.Description}</textarea>
+            <input
+                type="checkbox"
+                name="Shared"
+                id="Shared"
+                ${photo.Shared ? "checked" : ""}
+            />
+            <label for="Shared" class="form-label">Partagée</label>
+            </fieldset>
+            <br>
+            <fieldset>
+            <legend>Image</legend>
+            <!-- nécessite le fichier javascript 'imageControl.js' -->
+            <div class='imageUploader' 
+                   newImage='${create}' 
+                   controlId='Image' 
+                   imageSrc='${photo.Image}' 
+                   waitingImage="Loading_icon.gif">
+            </div>
+            </fieldset>
+            <input type="submit" value="Enregistrer" id="savePhoto" class="btn btn-primary">
+            <input type="button" value="Annuler" id="cancel" class="btn btn-secondary">
+        </form>
+    `);
+    initImageUploaders();
+    initFormValidation(); // important do to after all html injection!
+    $('#photoForm').on("submit", async function (event) {
+        event.preventDefault();
+        let photo = getFormData($("#photoForm"));
+        photo.Shared = $("#Shared").is(':checked');
+        showWaitingGif();
+        let result = await (create ? API.CreatePhoto : API.UpdatePhoto)(photo);
+        if (result)
+            renderPhotosList();
+        else
+            renderError("Une erreur est survenue! " + API.currentHttpError);
+    });
+    $('#cancel').on("click", function () {
+        renderPhotosList();
+    });
+}
+function userArrayToTooltip(usersLiked) {
+    return usersLiked.slice(0, 10).join("\n") + (usersLiked.length > 10 ? `\n...` : "");
+}
+function tooltipToUserArray(tooltipList) {
+    let arr = tooltipList.split("\n");
+    if (arr.length == 1 && arr[0] == "") {
+        return [];
+    }
+    return arr.slice(0, 10);
+}
+function renderPhoto(photo) {
+    return $(`
+    <div class="photoLayout">
+        <div class="photoTitleContainer">
+            <span class="photoTitle">${photo.Title}</span>
+            ${photo.OwnerId == API.retrieveLoggedUser().Id ? `<span class="editPhotoCmd cmdIcon fa fa-pencil" editPhotoId="${photo.Id}" title="Modifier ${photo.Title}"></span>
+                <span class="deletePhotoCmd cmdIcon fa fa-trash" deletePhotoId="${photo.Id}" title="Effacer ${photo.Title}"></span>` : ""
+        }
+        </div>
+        <img class="photoImage" src="${photo.Image}" alt="" />
+        <span class="photoCreationDate">
+            ${convertToFrenchDate(photo.Date * 1000) /* supports millisecond timestamps only */}
+                <span class="likesSummary" title="${userArrayToTooltip(photo.UsersLiked)}">
+                    <span>${photo.UsersLiked.length}</span>
+                    <span class="likeCmd cmdIcon ${photo.UsersLiked.includes(API.retrieveLoggedUser().Name) ? LIKE_LIKED_ICON_FAMILY : LIKE_NOTLIKED_ICON_FAMILY} fa-thumbs-up" likePhotoId="${photo.Id}"></span>
+                </span>
+        </span>
+    </div>
+    `);
+}
+async function renderPhotosList() {
+    $("#newPhotoCmd").show();
+    $("#abort").hide();
+    eraseContent();
+
+    $("#content").append(`
+    <div class="photosLayout" id="photosContainer">
+    </div>`);
+
+    let photosContainer = $("#photosContainer");
+    let photosResponse = await API.GetPhotos(`?offset=${offset}&limit=${limit}`);
+    if (!photosResponse) {
+        renderError("Une erreur est survenue");
+        return;
+    }
+    photosResponse.data.forEach((photo) => {
+        photosContainer.append(renderPhoto(photo));
+    });
+
+    attachCmd();
 }
 function renderVerify() {
     eraseContent();
