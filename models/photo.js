@@ -22,10 +22,10 @@ export default class Photo extends Model {
         let usersRepository = new Repository(new UserModel());
         let photoLikesRepository = new Repository(new PhotoLikeModel());
         instance.Owner = usersRepository.get(instance.OwnerId);
-        instance.OwnerName = instance.Owner.Name;
         instance.UsersLiked = photoLikesRepository.getAll({PhotoId: instance.Id}).map((likeEntry) => {
             return usersRepository.get(likeEntry.AccountId).Name;
         });
+        instance.Numlikes = instance.UsersLiked.length;
         return instance;
     }
 }

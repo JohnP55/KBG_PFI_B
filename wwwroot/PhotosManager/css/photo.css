@@ -95,4 +95,7 @@
     padding: 5px;
 }
 
-
+.photoDetailsContainer {
+    display: inline-block;
+    margin: 10px;
+}

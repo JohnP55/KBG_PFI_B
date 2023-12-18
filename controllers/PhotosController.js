@@ -12,19 +12,24 @@ export default
         super(HttpContext, new Repository(new PhotoModel()), Authorizations.user());
         this.photoLikesRepository = new Repository(new PhotoLikeModel());
     }
-    setExtraData(data) {
+    getUser() {
         if (this.HttpContext.req.headers["authorization"] != undefined) {
             let token = this.HttpContext.req.headers["authorization"].replace('Bearer ', '');
             token = TokenManager.find(token);
-            if (!token) return this.HttpContext.response.unAuthorized();
-            if (data.Id != 0) {
-                if (this.repository.get(data.Id).OwnerId != token.User.Id) {
-                    return this.HttpContext.response.unAuthorized();
-                }
-            }
-            data.OwnerId = token.User.Id;
-            data.Date = utilities.nowInSeconds();
+            return token.User;
         }
+    }
+    setExtraData(data) {
+        let user = getUser();
+        if (!user) return this.HttpContext.response.unAuthorized();
+
+        if (data.Id != 0) {
+            if (this.repository.get(data.Id).OwnerId != user.Id) {
+                return this.HttpContext.response.unAuthorized();
+            }
+        }
+        data.OwnerId = user.Id;
+        data.Date = utilities.nowInSeconds();
     }
     post(data) {
         this.setExtraData(data);

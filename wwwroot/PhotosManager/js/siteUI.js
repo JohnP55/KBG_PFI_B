@@ -2,6 +2,7 @@
 let contentScrollPosition = 0;
 let sortType = "date";
 let keywords = "";
+let fieldFilter = {};
 let loginMessage = "";
 let Email = "";
 let EmailError = "";
@@ -77,42 +78,6 @@ function attachCmd() {
     $('#newPhotoCmd').on("click", () => {
         saveContentScrollPosition();
         renderPhotoForm();
-    });
-    $('.editPhotoCmd').on("click", function() {
-        saveContentScrollPosition();
-        renderEditPhotoForm($(this).attr('editPhotoId'));
-    });
-    $('.deletePhotoCmd').on("click", function() {
-        saveContentScrollPosition();
-        renderConfirmDeletePhoto($(this).attr('deletePhotoId'));
-    });
-    $('.likeCmd').on("click", async function () {
-        let result = await API.LikePhoto($(this).attr("likePhotoId"));
-        if (result) {
-            let likeCountElem = $(this).prev();
-            let usersName = API.retrieveLoggedUser().Name;
-            let userArray = tooltipToUserArray($(this).parent().attr("title"));
-
-            if ($(this).hasClass(LIKE_NOTLIKED_ICON_FAMILY)) {
-                $(this).removeClass(LIKE_NOTLIKED_ICON_FAMILY);
-                $(this).addClass(LIKE_LIKED_ICON_FAMILY);
-
-                likeCountElem.html(parseInt(likeCountElem.html()) + 1);
-
-                userArray.push(usersName);
-
-            } else if ($(this).hasClass(LIKE_LIKED_ICON_FAMILY)) { // accounting for the rare occurence that a like button does somehow load without either class
-                $(this).removeClass(LIKE_LIKED_ICON_FAMILY);
-                $(this).addClass(LIKE_NOTLIKED_ICON_FAMILY);
-                likeCountElem.html(parseInt(likeCountElem.html()) - 1);
-
-                let index = userArray.indexOf(usersName);
-                if (index > -1) {
-                    userArray.splice(index, 1);
-                }
-            }
-            $(this).parent().attr("title", userArrayToTooltip(userArray));
-        }
     });
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -406,7 +371,26 @@ function renderAbout() {
 async function renderPhotos() {
     timeout();
     showWaitingGif();
+    restoreContentScrollPosition();
     UpdateHeader('Liste des photos', 'photosList')
+    $("#sortByDateCmd").on("click", function() {
+        sortType = "date";
+    });
+    $("#sortByOwnersCmd").on("click", function() {
+        sortType = "OwnerId";
+    });
+    $("#sortByLikesCmd").on("click", function() {
+        sortType = "Numlikes,desc";
+    });
+    $("#ownerOnlyCmd").on("click", function() {
+        if (fieldFilter) {
+            $(this).find('.fa-check:first').remove();
+            fieldFilter = {};
+        } else {
+            $(this).prepend(`<i class="menuIcon fa fa-check mx-2"></i>`);
+            fieldFilter = {OwnerId: API.retrieveLoggedUser().Id};
+        }
+    });
     $("#newPhotoCmd").show();
     $("#abort").hide();
     let loggedUser = API.retrieveLoggedUser();
@@ -430,6 +414,28 @@ async function renderEditPhotoForm(id) {
         renderPhotoForm(photo);
     else
         renderError("Photo introuvable!");
+}
+async function renderDetailsPhoto(photoId) {
+    eraseContent();
+    UpdateHeader('Détails', 'photoDetails')
+    let photo = await API.GetPhotosById(photoId);
+    $("#content").append(`
+    <div class="photoDetailsContainer">
+        <div class="photoDetailsOwner">
+            <div class="UserAvatarSmall" style="background-image:url('${photo.Owner.Avatar}')"></div>
+            <div class="UserName">${photo.Owner.Name}</div>
+        </div>
+        <div class="photoDetailsTitle">${photo.Title}</div>
+        <img class="photoDetailsLargeImage" src="${photo.Image}" />
+        <div class="photoCreationDate">
+            ${convertToFrenchDate(photo.Date * 1000) /* supports millisecond timestamps only */}
+                <span class="likesSummary" title="${userArrayToTooltip(photo.UsersLiked)}">
+                    <span>${photo.UsersLiked.length}</span>
+                    <span class="likeCmd cmdIcon ${photo.UsersLiked.includes(API.retrieveLoggedUser().Name) ? LIKE_LIKED_ICON_FAMILY : LIKE_NOTLIKED_ICON_FAMILY} fa-thumbs-up" likePhotoId="${photo.Id}"></span>
+                </span>
+        </div>
+        <div class="photoDetailsDescription">${photo.Description}</div>
+    </div>`);
 }
 function renderPhotoForm(photo = null) {
     $("#newPhotoCmd").hide();
@@ -497,12 +503,12 @@ function renderPhotoForm(photo = null) {
         showWaitingGif();
         let result = await (create ? API.CreatePhoto : API.UpdatePhoto)(photo);
         if (result)
-            renderPhotosList();
+            renderPhotos();
         else
             renderError("Une erreur est survenue! " + API.currentHttpError);
     });
     $('#cancel').on("click", function () {
-        renderPhotosList();
+        renderPhotos();
     });
 }
 function userArrayToTooltip(usersLiked) {
@@ -524,13 +530,16 @@ function renderPhoto(photo, bShowCmds=true) {
                 <span class="deletePhotoCmd cmdIcon fa fa-trash" deletePhotoId="${photo.Id}" title="Effacer ${photo.Title}"></span>` : ""
         }
         </div>
-        <img class="photoImage" src="${photo.Image}" alt="" />
+        <div class="photoImage detailsPhotoCmd" detailsPhotoId="${photo.Id}" style="background-image:url('${photo.Image}')">
+            <div class="UserAvatarSmall" style="background-image:url('${photo.Owner.Avatar}')"></div>
+           ${photo.Shared ? `<div class="UserAvatarSmall" style="background-image:url('images/shared.png')"></div>` : ""}
+        </div>
         <span class="photoCreationDate">
             ${convertToFrenchDate(photo.Date * 1000) /* supports millisecond timestamps only */}
-                <span class="likesSummary" title="${userArrayToTooltip(photo.UsersLiked)}">
+                ${bShowCmds ? `<span class="likesSummary" title="${userArrayToTooltip(photo.UsersLiked)}">
                     <span>${photo.UsersLiked.length}</span>
                     <span class="likeCmd cmdIcon ${photo.UsersLiked.includes(API.retrieveLoggedUser().Name) ? LIKE_LIKED_ICON_FAMILY : LIKE_NOTLIKED_ICON_FAMILY} fa-thumbs-up" likePhotoId="${photo.Id}"></span>
-                </span>
+                </span>` : ""}
         </span>
     </div>
     `);
@@ -545,16 +554,57 @@ async function renderPhotosList() {
     </div>`);
 
     let photosContainer = $("#photosContainer");
-    let photosResponse = await API.GetPhotos(`?offset=${offset}&limit=${limit}`);
+    let photosResponse = await API.GetPhotos(`?offset=${offset}&limit=${limit}&sort=${sortType}`);
     if (!photosResponse) {
         renderError("Une erreur est survenue");
         return;
     }
     photosResponse.data.forEach((photo) => {
-        photosContainer.append(renderPhoto(photo));
+        let user = API.retrieveLoggedUser();
+        if (photo.OwnerId == user.Id || photo.Shared || user.isAdmin)
+            photosContainer.append(renderPhoto(photo));
     });
 
-    attachCmd();
+    $('.editPhotoCmd').on("click", function() {
+        saveContentScrollPosition();
+        renderEditPhotoForm($(this).attr('editPhotoId'));
+    });
+    $('.deletePhotoCmd').on("click", function() {
+        saveContentScrollPosition();
+        renderConfirmDeletePhoto($(this).attr('deletePhotoId'));
+    });
+    $('.likeCmd').on("click", async function () {
+        let result = await API.LikePhoto($(this).attr("likePhotoId"));
+        if (result) {
+            let likeCountElem = $(this).prev();
+            let usersName = API.retrieveLoggedUser().Name;
+            let userArray = tooltipToUserArray($(this).parent().attr("title"));
+
+            if ($(this).hasClass(LIKE_NOTLIKED_ICON_FAMILY)) {
+                $(this).removeClass(LIKE_NOTLIKED_ICON_FAMILY);
+                $(this).addClass(LIKE_LIKED_ICON_FAMILY);
+
+                likeCountElem.html(parseInt(likeCountElem.html()) + 1);
+
+                userArray.push(usersName);
+
+            } else if ($(this).hasClass(LIKE_LIKED_ICON_FAMILY)) { // accounting for the rare occurence that a like button does somehow load without either class
+                $(this).removeClass(LIKE_LIKED_ICON_FAMILY);
+                $(this).addClass(LIKE_NOTLIKED_ICON_FAMILY);
+                likeCountElem.html(parseInt(likeCountElem.html()) - 1);
+
+                let index = userArray.indexOf(usersName);
+                if (index > -1) {
+                    userArray.splice(index, 1);
+                }
+            }
+            $(this).parent().attr("title", userArrayToTooltip(userArray));
+        }
+    });
+    $('.detailsPhotoCmd').on("click", function() {
+        saveContentScrollPosition();
+        renderDetailsPhoto($(this).attr('detailsPhotoId'));
+    });
 }
 async function renderConfirmDeletePhoto(photoId) {
     timeout();
@@ -583,13 +633,13 @@ async function renderConfirmDeletePhoto(photoId) {
             $("#photoToDeleteContainer").append(renderPhoto(photoToDelete, false));
             $("#confirmDeletePhotoCmd").on("click", async function () {
                 if (await API.DeletePhoto(photoToDelete.Id)) {
-                    renderPhotosList();
+                    renderPhotos();
                 } else {
                     renderError("Un problème est survenu.");
                 }
                 
             });
-            $("#abortDeletePhotoCmd").on("click", renderPhotosList);
+            $("#abortDeletePhotoCmd").on("click", renderPhotos);
 }
 function renderVerify() {
     eraseContent();
