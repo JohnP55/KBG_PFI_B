@@ -1,4 +1,6 @@
 import UserModel from '../models/user.js';
+import PhotoModel from '../models/photo.js';
+import PhotoLikeModel from '../models/photoLike.js';
 import TokenModel from '../models/token.js';
 import Repository from '../models/repository.js';
 import TokenManager from '../tokensManager.js';
@@ -201,6 +203,14 @@ export default class AccountsController extends Controller {
     // GET:account/remove/id
     remove(id) { // warning! this is not an API endpoint
         if (Authorizations.writeGranted(this.HttpContext, Authorizations.user())) {
+            let photosRepository = new Repository(new PhotoModel());
+            photosRepository.getAll({OwnerId:id}).forEach((e) => {
+                photosRepository.remove(e.Id);
+            });
+            let photoLikesRepository = new Repository(new PhotoLikeModel());
+            photoLikesRepository.getAll({AccountId:id}).forEach((e) => {
+                photoLikesRepository.remove(e.Id);
+            });
             this.tokensRepository.keepByFilter(token => token.User.Id != id);
             let previousAuthorization = this.authorizations;
             this.authorizations = Authorizations.user();

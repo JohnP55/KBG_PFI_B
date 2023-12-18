@@ -45,11 +45,10 @@ export default
         if (res) return res;
         super.put(data);
     }
-    remove(data) {
-        let likesRepository = new Repository(new PhotoLikeModel());
-        likesRepository.getAll({PhotoId:data}).forEach((e) => {
-            likesRepository.remove(e.Id);
+    remove(id) {
+        this.photoLikesRepository.getAll({PhotoId:id}).forEach((e) => {
+            this.photoLikesRepository.remove(e.Id);
         });
-        super.remove(data);
+        super.remove(id);
     }
 }
