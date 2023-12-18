@@ -585,6 +585,9 @@ async function renderPhotosList() {
         renderError("Une erreur est survenue");
         return;
     }
+    if (photosResponse.data.length === 0) {
+        photosContainer.append(`<b style="margin: auto; text-align: center; padding: 20px;">Aucune photo à afficher.</b>`);
+    }
     photosResponse.data.forEach((photo) => {
         let user = API.retrieveLoggedUser();
         if (photo.OwnerId == user.Id || photo.Shared || user.isAdmin)
