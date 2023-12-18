@@ -24,19 +24,32 @@ export default
         if (!user) return this.HttpContext.response.unAuthorized();
 
         if (data.Id != 0) {
-            if (this.repository.get(data.Id).OwnerId != user.Id) {
+            let entry = this.repository.get(data.Id);
+            if (entry.OwnerId != user.Id && !user.isAdmin) {
                 return this.HttpContext.response.unAuthorized();
             }
+            data.OwnerId = entry.OwnerId;
+            data.Date = entry.Date;
+        } else {
+            data.OwnerId = user.Id;
+            data.Date = utilities.nowInSeconds();
         }
-        data.OwnerId = user.Id;
-        data.Date = utilities.nowInSeconds();
+        return false;
     }
     post(data) {
         this.setExtraData(data);
         super.post(data);
     }
     put(data) {
-        this.setExtraData(data);
+        let res = this.setExtraData(data);
+        if (res) return res;
         super.put(data);
+    }
+    remove(data) {
+        let likesRepository = new Repository(new PhotoLikeModel());
+        likesRepository.getAll({PhotoId:data}).forEach((e) => {
+            likesRepository.remove(e.Id);
+        });
+        super.remove(data);
     }
 }

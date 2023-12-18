@@ -547,11 +547,12 @@ function tooltipToUserArray(tooltipList) {
     return arr.slice(0, 10);
 }
 function renderPhoto(photo, bShowCmds=true) {
+    let user = API.retrieveLoggedUser();
     return $(`
     <div class="photoLayout">
         <div class="photoTitleContainer">
             <span class="photoTitle">${photo.Title}</span>
-            ${bShowCmds && photo.OwnerId == API.retrieveLoggedUser().Id ? `<span class="editPhotoCmd cmdIcon fa fa-pencil" editPhotoId="${photo.Id}" title="Modifier ${photo.Title}"></span>
+            ${bShowCmds && (photo.OwnerId == user.Id || user.isAdmin) ? `<span class="editPhotoCmd cmdIcon fa fa-pencil" editPhotoId="${photo.Id}" title="Modifier ${photo.Title}"></span>
                 <span class="deletePhotoCmd cmdIcon fa fa-trash" deletePhotoId="${photo.Id}" title="Effacer ${photo.Title}"></span>` : ""
         }
         </div>
