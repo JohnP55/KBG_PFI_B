@@ -2,7 +2,7 @@
 let contentScrollPosition = 0;
 let sortType = "date";
 let keywords = "";
-let fieldFilter = {};
+let onlyMyPhotos = false;
 let loginMessage = "";
 let Email = "";
 let EmailError = "";
@@ -21,6 +21,8 @@ let offset = 0;
 
 const LIKE_NOTLIKED_ICON_FAMILY = "fa-regular";
 const LIKE_LIKED_ICON_FAMILY = "fa";
+const CHECK_ICON = `<i class="menuIcon fa fa-check mx-2"></i>`;
+const BLANK_ICON = `<i class="menuIcon fa fa-fw mx-2"></i>`;
 
 Init_UI();
 function Init_UI() {
@@ -116,22 +118,22 @@ function viewMenu(viewName) {
         // todo
         return `<div class="dropdown-divider"></div>
         <span class="dropdown-item" id="sortByDateCmd">
-        <i class="menuIcon fa fa-check mx-2"></i>
+        ${sortType === "date" ? CHECK_ICON : BLANK_ICON}
         <i class="menuIcon fa fa-calendar mx-2"></i>
         Photos par date de création
         </span>
         <span class="dropdown-item" id="sortByOwnersCmd">
-        <i class="menuIcon fa fa-fw mx-2"></i>
+        ${sortType === "OwnerId" ? CHECK_ICON : BLANK_ICON}
         <i class="menuIcon fa fa-users mx-2"></i>
         Photos par créateur
         </span>
         <span class="dropdown-item" id="sortByLikesCmd">
-        <i class="menuIcon fa fa-fw mx-2"></i>
+        ${sortType === "Numlikes" ? CHECK_ICON : BLANK_ICON}
         <i class="menuIcon fa fa-user mx-2"></i>
         Photos les plus aiméés
         </span>
         <span class="dropdown-item" id="ownerOnlyCmd">
-        <i class="menuIcon fa fa-fw mx-2"></i>
+        ${onlyMyPhotos ? CHECK_ICON : BLANK_ICON}
         <i class="menuIcon fa fa-user mx-2"></i>
         Mes photos
         </span>`;
@@ -368,28 +370,51 @@ function renderAbout() {
             </div>
         `))
 }
+function updateSortsRender(chosenSort) {
+    let dateSort = $("#sortByDateCmd");
+    let ownerSort = $("#sortByOwnersCmd");
+    let likesSort = $("#sortByLikesCmd");
+    let sorts = [dateSort, ownerSort, likesSort];
+    sorts.forEach(sort => {
+        let checkIcon = sort.find('.fa-check:first')[0];
+        if (checkIcon) {
+            checkIcon.remove();
+            sort.prepend(BLANK_ICON);
+        }
+    });
+    chosenSort.find('.fa-fw:first').remove();
+    chosenSort.prepend(CHECK_ICON);
+}
 async function renderPhotos() {
     timeout();
     showWaitingGif();
     restoreContentScrollPosition();
     UpdateHeader('Liste des photos', 'photosList')
     $("#sortByDateCmd").on("click", function() {
+        updateSortsRender($(this));
         sortType = "date";
+        renderPhotos();
     });
     $("#sortByOwnersCmd").on("click", function() {
+        updateSortsRender($(this));
         sortType = "OwnerId";
+        renderPhotos();
     });
     $("#sortByLikesCmd").on("click", function() {
+        updateSortsRender($(this));
         sortType = "Numlikes,desc";
+        renderPhotos();
     });
     $("#ownerOnlyCmd").on("click", function() {
-        if (fieldFilter) {
+        if (onlyMyPhotos) {
             $(this).find('.fa-check:first').remove();
-            fieldFilter = {};
+            $(this).prepend(BLANK_ICON);
         } else {
-            $(this).prepend(`<i class="menuIcon fa fa-check mx-2"></i>`);
-            fieldFilter = {OwnerId: API.retrieveLoggedUser().Id};
+            $(this).find('.fa-fw:first').remove();
+            $(this).prepend(CHECK_ICON);
         }
+        onlyMyPhotos = !onlyMyPhotos;
+        renderPhotos();
     });
     $("#newPhotoCmd").show();
     $("#abort").hide();
@@ -554,7 +579,8 @@ async function renderPhotosList() {
     </div>`);
 
     let photosContainer = $("#photosContainer");
-    let photosResponse = await API.GetPhotos(`?offset=${offset}&limit=${limit}&sort=${sortType}`);
+    let filter = onlyMyPhotos ? `OwnerId=${API.retrieveLoggedUser().Id}` : "";
+    let photosResponse = await API.GetPhotos(`?offset=${offset}&limit=${limit}&sort=${sortType}&${filter}`);
     if (!photosResponse) {
         renderError("Une erreur est survenue");
         return;

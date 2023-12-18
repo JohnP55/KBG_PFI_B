@@ -20,7 +20,7 @@ export default
         }
     }
     setExtraData(data) {
-        let user = getUser();
+        let user = this.getUser();
         if (!user) return this.HttpContext.response.unAuthorized();
 
         if (data.Id != 0) {
